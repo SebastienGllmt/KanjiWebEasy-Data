@@ -1,0 +1,1 @@
+for /r query %%v in (*.dot) do "C:\Program Files (x86)\Graphviz2.38\bin\dot" -Tpng %%v > %%v.png

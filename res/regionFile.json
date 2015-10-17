@@ -1,0 +1,65 @@
+{
+  "九州・沖縄": {
+    "沖縄": "http://www3.nhk.or.jp/lnews/okinawa/nhk_okinawa.xml",
+    "大分": "http://www3.nhk.or.jp/lnews/oita/nhk_oita.xml",
+    "長崎": "http://www3.nhk.or.jp/lnews/nagasaki/nhk_nagasaki.xml",
+    "鹿児島": "http://www3.nhk.or.jp/lnews/kagoshima/nhk_kagoshima.xml",
+    "北九州": "http://www3.nhk.or.jp/lnews/kitakyushu/nhk_kitakyushu.xml",
+    "佐賀": "http://www3.nhk.or.jp/lnews/saga/nhk_saga.xml",
+    "宮崎": "http://www3.nhk.or.jp/lnews/miyazaki/nhk_miyazaki.xml",
+    "熊本": "http://www3.nhk.or.jp/lnews/kumamoto/nhk_kumamoto.xml",
+    "福岡": "http://www3.nhk.or.jp/fukuoka-news/"
+  },
+  "東海・北陸": {
+    "石川": "http://www3.nhk.or.jp/lnews/kanazawa/nhk_kanazawa.xml",
+    "愛知": "http://www3.nhk.or.jp/tokai-news/",
+    "岐阜": "http://www3.nhk.or.jp/lnews/gifu/nhk_gifu.xml",
+    "福井": "http://www3.nhk.or.jp/lnews/fukui/nhk_fukui.xml",
+    "静岡": "http://www3.nhk.or.jp/lnews/shizuoka/nhk_shizuoka.xml",
+    "富山": "http://www3.nhk.or.jp/lnews/toyama/nhk_toyama.xml",
+    "三重": "http://www3.nhk.or.jp/lnews/tsu/nhk_tsu.xml"
+  },
+  "北海道": {"北海道": "http://www3.nhk.or.jp/sapporo-news/"},
+  "四国": {
+    "香川": "http://www3.nhk.or.jp/lnews/takamatsu/nhk_takamatsu.xml",
+    "徳島": "http://www3.nhk.or.jp/lnews/tokushima/nhk_tokushima.xml",
+    "愛媛": "http://www3.nhk.or.jp/matsuyama-news/",
+    "高知": "http://www3.nhk.or.jp/lnews/kochi/nhk_kochi.xml"
+  },
+  "中国": {
+    "鳥取": "http://www3.nhk.or.jp/lnews/tottori/nhk_tottori.xml",
+    "広島": "http://www3.nhk.or.jp/hiroshima-news/",
+    "島根": "http://www3.nhk.or.jp/lnews/matsue/nhk_matsue.xml",
+    "山口": "http://www3.nhk.or.jp/lnews/yamaguchi/nhk_yamaguchi.xml",
+    "岡山": "http://www3.nhk.or.jp/lnews/okayama/nhk_okayama.xml"
+  },
+  "東北": {
+    "福島": "http://www3.nhk.or.jp/lnews/fukushima/nhk_fukushima.xml",
+    "岩手": "http://www3.nhk.or.jp/lnews/morioka/nhk_morioka.xml",
+    "秋田": "http://www3.nhk.or.jp/lnews/akita/nhk_akita.xml",
+    "山形": "http://www3.nhk.or.jp/lnews/yamagata/nhk_yamagata.xml",
+    "宮城": "http://www3.nhk.or.jp/tohoku-news/",
+    "青森": "http://www3.nhk.or.jp/lnews/aomori/nhk_aomori.xml"
+  },
+  "各地のニュース": {},
+  "関東甲信越": {
+    "神奈川": "http://www3.nhk.or.jp/lnews/yokohama/nhk_yokohama.xml",
+    "新潟": "http://www3.nhk.or.jp/lnews/niigata/nhk_niigata.xml",
+    "長野": "http://www3.nhk.or.jp/lnews/nagano/nhk_nagano.xml",
+    "茨城": "http://www3.nhk.or.jp/lnews/mito/nhk_mito.xml",
+    "埼玉": "http://www3.nhk.or.jp/lnews/saitama/nhk_saitama.xml",
+    "群馬": "http://www3.nhk.or.jp/lnews/maebashi/nhk_maebashi.xml",
+    "栃木": "http://www3.nhk.or.jp/lnews/utsunomiya/nhk_utsunomiya.xml",
+    "首都圏": "http://www3.nhk.or.jp/shutoken-news/",
+    "山梨": "http://www3.nhk.or.jp/lnews/kofu/nhk_kofu.xml",
+    "千葉": "http://www3.nhk.or.jp/lnews/chiba/nhk_chiba.xml"
+  },
+  "近畿": {
+    "大阪": "http://www3.nhk.or.jp/kansai-news/",
+    "滋賀": "http://www3.nhk.or.jp/lnews/otsu/nhk_otsu.xml",
+    "京都": "http://www3.nhk.or.jp/lnews/kyoto/nhk_kyoto.xml",
+    "和歌山": "http://www3.nhk.or.jp/lnews/wakayama/nhk_wakayama.xml",
+    "兵庫": "http://www3.nhk.or.jp/lnews/kobe/nhk_kobe.xml",
+    "奈良": "http://www3.nhk.or.jp/lnews/nara/nhk_nara.xml"
+  }
+}
