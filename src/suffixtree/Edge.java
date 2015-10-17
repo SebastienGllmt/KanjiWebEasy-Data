@@ -6,10 +6,8 @@ class Edge<D extends TreeData> {
    * The fact that this is final is important for performance
    * Edges should not make copies for strings but instead change the start/end indices
    */
-
   public final SentenceInfo sentenceInfo;
   public int stringStartIndex;
-
   /**
    * Exclusive range
    */
