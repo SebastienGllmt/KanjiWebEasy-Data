@@ -12,7 +12,7 @@ public class PrintUtils {
 		return String.format("labelloc=\"t\";\nlabel=\"%s\";", title);
 	}
 	
-	public static <D extends TreeData> String printAllNodes(Node<D> n) {
+	public static <D> String printAllNodes(Node<D> n) {
 		String val = n.toDotFormat();
 		for (Edge<D> e : n.getEdgeList().values()) {
 			val += printAllNodes(e.child);
@@ -20,7 +20,7 @@ public class PrintUtils {
 		return val;
 	}
 	
-	public static <D extends TreeData> String printAllEdges(Node<D> n) {
+	public static <D> String printAllEdges(Node<D> n) {
 		String val = "";
 		for (Character c : n.getEdgeList().keySet()) {
 			Edge<D> e = n.getEdgeList().get(c);
@@ -35,7 +35,7 @@ public class PrintUtils {
 		return val;
 	}
 	
-	public static <D extends TreeData> String printAllSuffixLinks(Node<D> n) {
+	public static <D> String printAllSuffixLinks(Node<D> n) {
 		String val = "";
 		if (n.suffixLink != null) {
 			val = String.format("%s -> %s [label=\"\",weight=1,style=dotted,arrowhead=empty]\n", n.toString(), n.suffixLink.toString());

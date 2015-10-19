@@ -220,7 +220,7 @@ public class NewsEasyFormatUtil {
 
     ParseResult parseResult = NewsEasyFormatUtil.getArticleText(jsonInput, jsonFactory);
 
-    st.addString(new SentenceInfo(parseResult.TITLE, KanjiBucketer.getSuffixBuckets(parseResult.TITLE, symbolMap)), new ArticleInfo(articleID, (byte) 1));
+    st.addString(new SentenceInfo(parseResult.TITLE, KanjiBucketer.getSuffixBuckets(parseResult.TITLE, symbolMap)), new ArticleInfo(articleID, (short) 1));
 
     long treeBuildTime = 0;
     byte sentenceNum = 2;

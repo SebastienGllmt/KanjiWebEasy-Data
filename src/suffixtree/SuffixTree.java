@@ -1,19 +1,9 @@
 package suffixtree;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -22,7 +12,7 @@ import queryparse.BaseNode;
 import queryparse.FiniteAutomaton;
 import queryparse.ReservedSymbols;
 
-public class SuffixTree<D extends TreeData> {
+public class SuffixTree<D> {
 
   public static final String EMPTY_STRING = "ɛ";
   private static final char END_CHAR = '‖';
@@ -32,7 +22,7 @@ public class SuffixTree<D extends TreeData> {
   private int allocatedNodes;
 
   public SuffixTree() {
-    this.root = Node.newInternalNode(this.getNextNodeId());
+    this.root = Node.newInternalNode(null, this.getNextNodeId());
   }
 
   public int getNextNodeId() {
@@ -83,33 +73,23 @@ public class SuffixTree<D extends TreeData> {
 
         /*
          * The string might end with multiples characters that are the same so we need to add an extra epsilon edge
-         * To show how we handle this, imagine the case ababb bb are the same same, so when we're adding suffixes we will get to the point where we have to add both "bb" and "b" (remaining = 2)
+         * To show how we handle this, imagine the case ababb. When we're adding suffixes we will get to the point where we have to add both "bb" and "b" (remaining = 2)
          * the insertion of bb will go fine, but one we get to the insertion of just "b", it's a subset of "bb"
          * this means our algorithm will follow the path from a node (root or result of following a suffix link) until the first "b" of a "bb" edge then stop.
-         * What we want is that when we get to the first "b" of "bb", we add an epsilon edge to indicate the presence of the suffix "b"
+         * What we want is that when we get to the first "b" of "bb", we add data to the node to indicate the presence of the suffix "b"
          * 
          * This case also occurs during the creation of generalized suffix trees
          * Notably if the string we're trying to insert is already contained entirely within the tree
          * Note that the suffix links in this case are extra helpful since if one string is entirely contained, all its suffixes are entirely contained also
          */
         if (activePoint.edge.stringStartIndex + activePoint.edgeOffset == sentenceInfo.sentence.length()) {
-          if (activePoint.node.getEdgeList().containsKey(Edge.EMPTY_EDGE)) {
-            activePoint.node.getEdgeList().get(Edge.EMPTY_EDGE).child.addData(data);
-
-            // we have to tie in the active point to the epsilon suffix chain here as if we added a new edge as before, this may have already been connected (but may not)
+          activePoint.node.addData(data);
+          // we have to tie in the active point to the epsilon suffix chain here as if we added a new edge as before, this may have already been connected (but may not)
+          // see argument outlined when we split an edge as to why if it's already connected, we're just connecting it to the same node
+          // we don't want to add epsilon edges to the root
+          if (activePoint.node != this.root) {
             // see argument outlined when we split an edge as to why if it's already connected, we're just connecting it to the same node
             this.createEpsilonSuffixLink(activePoint.node);
-          } else {
-            // we don't want to add epsilon edges to the root
-            if (activePoint.node != this.root) {
-              // note this call adds an epsilon link since the length is 0
-              Edge<D> e = Edge.createNewEdge(this, sentenceInfo, 0, 0, data);
-
-              // creating an edge of length 0 leaves creating the epsilon suffix link to the caller
-              // see argument outlined when we split an edge as to why if it's already connected, we're just connecting it to the same node
-              this.createEpsilonSuffixLink(activePoint.node);
-              activePoint.node.getEdgeList().put(Edge.EMPTY_EDGE, e);
-            }
           }
 
           activePoint.updateAfterAdd(this, activePoint.node);
@@ -120,10 +100,10 @@ public class SuffixTree<D extends TreeData> {
         // note: the current edge here may have been something else -- possible incorrect data. It was not necessarily null
         currEdge = activePoint.node.getEdgeList().get(sentenceInfo.sentence.charAt(activePoint.edge.stringStartIndex + activePoint.edgeOffset));
         if (currEdge == null) {
+          // we've never seen this substring before, so add it to our tree.
           int startIndex = activePoint.edge.stringStartIndex + activePoint.edgeOffset;
-          Edge<D> newEdge = Edge.createNewEdge(this, sentenceInfo, startIndex, sentenceInfo.sentence.length(), data);
 
-          activePoint.node.getEdgeList().put(currChar, newEdge);
+          activePoint.node.getEdgeList().put(currChar, Edge.restOfSentenceEdge(this, sentenceInfo, startIndex, data));
 
           if (activePoint.node == this.root) {
             // note: if we got here it's because the active node's edge list doesn't contain the suffix starting with a given character
@@ -162,7 +142,8 @@ public class SuffixTree<D extends TreeData> {
           // if our assumption that our current edge still matches our active edge is wrong
           // we must split the current edge into two parts and add our new branch
 
-          splitEdge(sentenceInfo, data, currChar, activePoint, currEdge, Edge.createNewEdge(this, sentenceInfo, i, sentenceInfo.sentence.length(), data));
+          Edge<D> nextEdge = sentenceInfo.sentence.length() - i > 0 ? Edge.restOfSentenceEdge(this, sentenceInfo, i, data) : null;
+          splitEdge(sentenceInfo, data, currChar, activePoint, currEdge, nextEdge);
           continue;
         }
       }
@@ -195,16 +176,16 @@ public class SuffixTree<D extends TreeData> {
     currEdge.stringEndIndex = currEdge.stringStartIndex + activePoint.getActiveLength() - 1;
 
     // create our new internal node which represents the fork between our new element and the branch of the tree previously there
-    Node<D> newNode = Node.newInternalNode(this.getNextNodeId());
-    if (newEdge.getLength() == 0) {
-      // This branch may represent an epsilon transition whose sole purpose is to help with article lookups
-      newNode.getEdgeList().put(Edge.EMPTY_EDGE, newEdge);
+    Node<D> newNode = Node.newInternalNode(null, this.getNextNodeId());
+    if (newEdge == null) {
+      // to indicate that some suffix ended exactly on the forking point, we add it to the data list
+      newNode.addData(data);
 
       /*
-       * since we made one branch be an epsilon, we have to remember to link it up with all other epsilon branches
+       * since the internal node represents the end of some suffix, we have to remember to link it up with all other epsilon branches
        * the problem is that when we call updateAfterAdd at the end of this function call, we are queuing up newNode to be used as a suffix link
        * so if this would result in newNode having a suffix link pointing to something that isn't the next epsilon transition then we would have a problem.
-       * 
+       * However,
        * To prove that they would have been linked regardless,
        * Note that the only way we can get here is if our current suffix S matched an existing edge E all the way up until the end of the sentence
        * So it will create a new internal node N here
@@ -216,6 +197,7 @@ public class SuffixTree<D extends TreeData> {
        */
       createEpsilonSuffixLink(newNode);
     } else {
+      assert newEdge.getLength() != 0;
       // note: the first letter in the edge is always the first character of the current suffix we're adding
       newNode.getEdgeList().put(currChar, newEdge);
     }
@@ -359,7 +341,7 @@ public class SuffixTree<D extends TreeData> {
 
     // traverse the remaining part of the first edge matching all of key[0] to see if we can match anything else in our wildcard from there
     if (keys.length > 1) {
-      int edgeIndex = currEdge.stringStartIndex + (keyIndex - lastKeyIndex);
+      int edgeIndex = (keyIndex - lastKeyIndex);
       if ((currEdge.getPartBitset(edgeIndex) & wildcardBuckets[1][0]) != 0) {
         for (KeyLocation kl : searchEdge(currEdge, edgeIndex, 0, keys, 1)) {
           LeafSearchBFS(currNode, articles, keys, kl.keyOffset, kl.keyIndex, max, wildcardBuckets);
@@ -371,52 +353,49 @@ public class SuffixTree<D extends TreeData> {
     return articles;
   }
 
-  private static <D extends TreeData> void LeafSearchBFS(Node<D> currNode, Set<D> articles, String[] keys, int keyOffset, int keyIndex, int max, int[][] wildcardBuckets) {
+  private static <D> void LeafSearchBFS(Node<D> currNode, Set<D> articles, String[] keys, int keyOffset, int keyIndex, int max, int[][] wildcardBuckets) {
     if (articles.size() == max) {
       return;
     }
-    if (currNode.isLeaf()) {
-      // if there are some keys we didn't match
-      if (keyIndex < keys.length) {
-        return;
-      }
-
-      if (articles.size() + currNode.dataSet.size() > max) {
-        articles.addAll(currNode.dataSet);
-      } else {
-        articles.addAll(currNode.dataSet.stream().limit(max - articles.size()).collect(Collectors.toSet()));
-      }
-    } else {
-      for (Edge<D> e : currNode.getEdgeList().values()) {
-        // if we've already matched all patterns
-        if (keyIndex >= keys.length) {
-          LeafSearchBFS(e.child, articles, keys, keyOffset, keyIndex, max, wildcardBuckets);
+    if (currNode.dataSet != null) {
+      // if we've matched all keys
+      if (keyIndex >= keys.length) {
+        if (articles.size() + currNode.dataSet.size() > max) {
+          articles.addAll(currNode.dataSet);
         } else {
-          if (e.getLength() == 0) {
-            continue;
-          }
-          // the current edge must lead to at least all the bits in the wildcard bucket
-          if ((e.getFullBitset() & wildcardBuckets[keyIndex][keyOffset]) == 0) {
-            continue;
-          }
+          articles.addAll(currNode.dataSet.stream().limit(max - articles.size()).collect(Collectors.toSet()));
+        }
+      }
+    }
+    for (Edge<D> e : currNode.getEdgeList().values()) {
+      // if we've already matched all patterns
+      if (keyIndex >= keys.length) {
+        LeafSearchBFS(e.child, articles, keys, keyOffset, keyIndex, max, wildcardBuckets);
+      } else {
+        if (e.getLength() == 0) {
+          continue;
+        }
+        // the current edge must lead to at least all the bits in the wildcard bucket
+        if ((e.getFullBitset() & wildcardBuckets[keyIndex][keyOffset]) == 0) {
+          continue;
+        }
 
-          // have to find branches with our pattern
-          List<KeyLocation> locations = searchEdge(e, e.stringStartIndex, keyOffset, keys, keyIndex);
-          // go down all paths where we matched part of a wildcard on the current edge
-          for (KeyLocation kl : locations) {
-            LeafSearchBFS(e.child, articles, keys, kl.keyOffset, kl.keyIndex, max, wildcardBuckets);
-          }
-          // go down all paths assuming we didn't match a wildcard on our current edge.
-          // Note we can only do this if we didn't partially match a key already (aka if the key offset is 0)
-          if (keyOffset == 0) {
-            LeafSearchBFS(e.child, articles, keys, keyOffset, keyIndex, max, wildcardBuckets);
-          }
+        // have to find branches with our pattern
+        List<KeyLocation> locations = searchEdge(e, e.stringStartIndex, keyOffset, keys, keyIndex);
+        // go down all paths where we matched part of a wildcard on the current edge
+        for (KeyLocation kl : locations) {
+          LeafSearchBFS(e.child, articles, keys, kl.keyOffset, kl.keyIndex, max, wildcardBuckets);
+        }
+        // go down all paths assuming we didn't match a wildcard on our current edge.
+        // Note we can only do this if we didn't partially match a key already (aka if the key offset is 0)
+        if (keyOffset == 0) {
+          LeafSearchBFS(e.child, articles, keys, keyOffset, keyIndex, max, wildcardBuckets);
         }
       }
     }
   }
 
-  private static <D extends TreeData> List<KeyLocation> searchEdge(Edge<D> currEdge, int edgeIndex, int keyOffset, String[] keys, int keyIndex) {
+  private static <D> List<KeyLocation> searchEdge(Edge<D> currEdge, int edgeIndex, int keyOffset, String[] keys, int keyIndex) {
     if (keyIndex >= keys.length) {
       return new ArrayList<KeyLocation>();
     }
@@ -453,7 +432,7 @@ public class SuffixTree<D extends TreeData> {
     return splitPoints;
   }
 
-  private static <D extends TreeData> int updateKeyIndex(String key, int keyIndex, Edge<D> currEdge) {
+  private static <D> int updateKeyIndex(String key, int keyIndex, Edge<D> currEdge) {
     int currEdgeIndex = currEdge.stringStartIndex;
     while (currEdgeIndex != currEdge.stringEndIndex) {
       if (currEdge.sentenceInfo.sentence.charAt(currEdgeIndex) == key.charAt(keyIndex)) {
@@ -522,9 +501,7 @@ public class SuffixTree<D extends TreeData> {
    *          The final state of our automaton we're trying to match
    * @return
    */
-  private static <D extends TreeData> void FindMatching(List<SuffixAutomatonState<D>> currDepth, Set<SuffixAutomatonState<D>> seenSet, Set<D> results, BaseNode finalState) {
-    List<SuffixAutomatonState<D>> nextDepth = new ArrayList<>();
-
+  private static <D> void FindMatching(List<SuffixAutomatonState<D>> currDepth, Set<SuffixAutomatonState<D>> seenSet, Set<D> results, BaseNode finalState) {
     if (currDepth.size() == 0) {
       return;
     }
@@ -535,6 +512,8 @@ public class SuffixTree<D extends TreeData> {
         DfsSearchNode(state.e.child, results);
       }
     }
+    
+    List<SuffixAutomatonState<D>> nextDepth = new ArrayList<>();
 
     // add all states that we can get to following our input to our next BFS depth
     for (SuffixAutomatonState<D> st : currDepth) {
@@ -548,21 +527,20 @@ public class SuffixTree<D extends TreeData> {
   /**
    * Performs a DFS search starting at a node and stores all results into a set
    */
-  private static <D extends TreeData> void DfsSearchNode(Node<D> n, Set<D> dataSet) {
-    if (n.isLeaf()) {
+  private static <D> void DfsSearchNode(Node<D> n, Set<D> dataSet) {
+    if (n.dataSet != null) {
       for (D d : n.dataSet) {
         dataSet.add(d);
       }
-    } else {
-      n.getEdgeList().forEach((k, e) -> DfsSearchNode(e.child, dataSet));
     }
+    n.getEdgeList().forEach((k, e) -> DfsSearchNode(e.child, dataSet));
   }
 
-  public static <D extends TreeData> List<SuffixAutomatonState<D>> getNextAutomatonNodes(SuffixAutomatonState<D> state, Set<SuffixAutomatonState<D>> seenSet) {
+  public static <D> List<SuffixAutomatonState<D>> getNextAutomatonNodes(SuffixAutomatonState<D> state, Set<SuffixAutomatonState<D>> seenSet) {
     List<SuffixAutomatonState<D>> nextNodes = new ArrayList<>();
     // first add any epsilon edges from the automaton
     for (AutomatonEdge epsilonAutomatonEdge : state.currNode.getEpsilonEdges()) {
-      SuffixTree.addEdgeToSearch(epsilonAutomatonEdge, state.e, state.edgeIndex, state.parseCount, nextNodes, seenSet);
+      SuffixTree.addEdgeToSearch(epsilonAutomatonEdge, state.e, state.edgeIndex, false, state.parseCount, nextNodes, seenSet);
     }
 
     if (state.e.stringStartIndex + state.edgeIndex == state.e.stringEndIndex) {
@@ -573,132 +551,29 @@ public class SuffixTree<D extends TreeData> {
       });
     } else {
       // find matches for specific char
-      AutomatonEdge charAutomatonEdge = state.currNode.getAutomatonEdge(state.e.chatAt(state.edgeIndex));
-      SuffixTree.addEdgeToSearch(charAutomatonEdge, state.e, state.edgeIndex + 1, state.parseCount + 1, nextNodes, seenSet);
+      AutomatonEdge charAutomatonEdge = state.currNode.getAutomatonEdge(state.e.charAt(state.edgeIndex));
+      SuffixTree.addEdgeToSearch(charAutomatonEdge, state.e, state.edgeIndex, true, state.parseCount + 1, nextNodes, seenSet);
       // find matches for general dot
       AutomatonEdge dotAutomatonEdge = state.currNode.getAutomatonEdge(ReservedSymbols.DOT);
 
       // these may be equal if the current node is a NOT node that doesn't include the current char nor the dot in its exclusion list
       if (charAutomatonEdge != dotAutomatonEdge) {
-        SuffixTree.addEdgeToSearch(dotAutomatonEdge, state.e, state.edgeIndex + 1, state.parseCount + 1, nextNodes, seenSet);
+        SuffixTree.addEdgeToSearch(dotAutomatonEdge, state.e, state.edgeIndex, true, state.parseCount + 1, nextNodes, seenSet);
       }
     }
 
     return nextNodes;
   }
 
-  private static <D extends TreeData> void addEdgeToSearch(AutomatonEdge automatonEdge, Edge<D> e, int newEdgeIndex, int newAutomatonIndex, List<SuffixAutomatonState<D>> nextNodes, Set<SuffixAutomatonState<D>> seenSet) {
+  private static <D> void addEdgeToSearch(AutomatonEdge automatonEdge, Edge<D> edge, int currIndex, boolean incrementIndex, int newAutomatonIndex, List<SuffixAutomatonState<D>> nextNodes, Set<SuffixAutomatonState<D>> seenSet) {
     if (automatonEdge == null) {
       return;
     }
     // bitset not 0 implies we match at least all the bitsets required to get to the end of the automaton
-    if (automatonEdge.bitset == 0 || (automatonEdge.bitset & e.getPartBitset(newEdgeIndex)) == automatonEdge.bitset) {
-      SuffixAutomatonState<D> newState = new SuffixAutomatonState<>(automatonEdge.child, newAutomatonIndex, e, newEdgeIndex);
+    if (automatonEdge.bitset == 0 || (automatonEdge.bitset & edge.getPartBitset(currIndex)) == automatonEdge.bitset) {
+      SuffixAutomatonState<D> newState = new SuffixAutomatonState<>(automatonEdge.child, newAutomatonIndex, edge, incrementIndex ? currIndex + 1 : currIndex);
       if (seenSet.add(newState)) {
         nextNodes.add(newState);
-      }
-    }
-  }
-
-  public void saveTree(String folder) {
-    File f = new File(folder);
-    f.mkdir();
-    saveNode(folder, this.root);
-  }
-
-  public static void readNode(String file) {
-    try (DataInputStream dis = new DataInputStream(new FileInputStream(file))) {
-      byte type = dis.readByte();
-      int tableSize = dis.readInt();
-      System.out.println("Table size: " + tableSize);
-      for (int i = 0; i < tableSize; i++) {
-        int c = dis.readChar();
-        int size = dis.readInt();
-        System.out.printf("%c %d\n", c, size);
-      }
-      for (int i = 0; i < tableSize; i++) {
-        int bitset = dis.readInt();
-        System.out.println("Child bitset: " + bitset);
-        int childId = dis.readInt();
-        System.out.println("child Id: " + childId);
-        int strSize = dis.readByte();
-        char[] str = new char[strSize];
-        for (int j = 0; j < strSize; j++) {
-          str[j] = dis.readChar();
-        }
-        String edgeWord = new String(str);
-        System.out.println("Word: " + edgeWord);
-      }
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-  }
-
-  public void saveToDb(Connection conn) throws SQLException {
-    saveToDb(conn, this.root);
-  }
-
-  private void saveToDb(Connection conn, Node<D> n) throws SQLException {
-    if (n.isLeaf()) {
-
-    } else {
-      for (Entry<Character, Edge<D>> entry : n.getEdgeList().entrySet()) {
-        Statement statement = conn.createStatement();
-        Edge<D> edge = entry.getValue();
-        statement.executeUpdate(String.format("INSERT INTO \"Edge\" VALUES(%d, %d, '%s', %d, %d)", n.getId(), edge.child.getId(), edge.getText(), edge.childBitset, edge.getFullBitset()));
-        saveToDb(conn, edge.child);
-      }
-    }
-  }
-
-  private void saveNode(String folder, Node<D> node) {
-    if (node.isLeaf()) {
-      try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(folder + "/" + node.getId() + ".branch"))) {
-        dos.writeByte(Node.LEAF);
-        dos.writeInt(node.dataSet.size());
-        for (D data : node.dataSet) {
-          dos.write(data.toData());
-        }
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    } else {
-      // create a lookup table for how many bytes we have to skip to find data for item i after reading row i in this table
-      int[] charStart = new int[node.getEdgeList().size()];
-      int size = 0;
-      int tableEntrySize = 2 /* size of char */ + 4 /* size of int */;
-      int tableSize = tableEntrySize * charStart.length;
-
-      List<Entry<Character, Edge<D>>> edgeList = new ArrayList<>(node.getEdgeList().entrySet());
-      for (int i = 0; i < edgeList.size(); i++) {
-        charStart[i] = size + tableSize - ((i + 1 /* the +1 is because we use distance after reading row i */) * tableEntrySize);
-
-        size += 4; // bitset (int)
-        size += 4; // child id (int)
-        size += 1; // size of string (byte)
-        Edge<D> e = edgeList.get(i).getValue();
-        size += 2 * (e.stringEndIndex - e.stringStartIndex); // letters (chars)
-      }
-
-      try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(folder + "/" + node.getId() + ".branch"))) {
-        dos.writeByte(Node.INTERNAL);
-        dos.writeInt(edgeList.size());
-        // first write our lookup table
-        for (int i = 0; i < charStart.length; i++) {
-          dos.writeChar(edgeList.get(i).getKey());
-          dos.writeInt(charStart[i]);
-        }
-
-        // now write the data
-        for (Entry<Character, Edge<D>> entry : edgeList) {
-          Edge<D> e = entry.getValue();
-          dos.writeInt(e.childBitset);
-          dos.writeInt(e.child.getId());
-          dos.writeByte(e.stringEndIndex - e.stringStartIndex);
-          dos.writeChars(e.getText());
-        }
-      } catch (IOException e) {
-        e.printStackTrace();
       }
     }
   }

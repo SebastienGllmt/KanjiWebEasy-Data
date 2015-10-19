@@ -38,6 +38,7 @@ public class SentenceIterator implements Iterator<String> {
 		}
 		return startIndex;
 	}
+	
 	public static int getEnd(int startIndex, String articleText) {
 		int endIndex = startIndex;
 		boolean inQuote = false;

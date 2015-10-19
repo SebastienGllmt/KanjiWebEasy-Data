@@ -1,9 +1,10 @@
 package suffixtree;
 
 import java.util.LinkedList;
+import java.util.List;
 import java.util.TreeMap;
 
-class Node<D extends TreeData> {
+class Node<D> {
 
   public Node<D> suffixLink;
   private TreeMap<Character, Edge<D>> edgeList;
@@ -13,7 +14,7 @@ class Node<D extends TreeData> {
   /**
    * Note that the leaf can't be reached twice in the add to the suffix tree
    */
-  //public final List<D> dataSet;
+  public List<D> dataSet;
 
   private Node(D data, int allocatedID) {
     this.edgeList = null;
@@ -28,8 +29,8 @@ class Node<D extends TreeData> {
       this.dataSet = null;
     }
   }
-  
-  public int getId(){
+
+  public int getId() {
     return this.ID;
   }
 
@@ -41,19 +42,16 @@ class Node<D extends TreeData> {
     return this.edgeList;
   }
 
-  public static <D extends TreeData> Node<D> newLeafNode(D data, int allocatedID) {
+  public static <D> Node<D> newInternalNode(D data, int allocatedID) {
     return new Node<D>(data, allocatedID);
-  }
-
-  public static <D extends TreeData> Node<D> newInternalNode(int allocatedID) {
-    return new Node<D>(null, allocatedID);
   }
 
   public void addData(D data) {
     if (data != null) {
+      if (this.dataSet == null) {
+        this.dataSet = new LinkedList<D>();
+      }
       this.dataSet.add(data);
-    }else{
-      assert false;
     }
   }
 
@@ -61,11 +59,7 @@ class Node<D extends TreeData> {
     return "node" + this.ID;
   }
 
-  public boolean isLeaf() {
-    return this.edgeList == null || this.edgeList.size() == 0;
-  }
-
-  private static final String LEAF_NODE_COLOR = "black", INTERNAL_NODE_COLOR = "lightgrey", PHANTOM_NODE_COLOR = "red", ROOT_NODE_COLOR = "green", END_NODE_COLOR = "pink";
+  private static final String LEAF_NODE_COLOR = "black", INTERNAL_NODE_COLOR = "grey", INTERNAL_WITH_DATA_NODE_COLOR = "red", ROOT_NODE_COLOR = "green";
 
   public String toDotFormat() {
     String fillColor = LEAF_NODE_COLOR;
@@ -74,26 +68,15 @@ class Node<D extends TreeData> {
       fillColor = ROOT_NODE_COLOR;
     } else {
       // if is internal node
-      if (this.getEdgeList().size() > 1) {
+      if (this.getEdgeList().size() >= 1) {
         fillColor = INTERNAL_NODE_COLOR;
       }
-      // if only has 2 branches, one of which is an epsilon transition
-      if (this.getEdgeList().size() == 2 && this.getEdgeList().get(Edge.EMPTY_EDGE) != null) {
-        // then this is a phantom edge
-        fillColor = PHANTOM_NODE_COLOR;
+      if (this.getEdgeList().size() >= 1 && this.dataSet != null) {
+        fillColor = INTERNAL_WITH_DATA_NODE_COLOR;
       }
     }
 
-    // if this node only has an epsilon transition after it
-    if (this.getEdgeList().size() == 1) {
-      fillColor = END_NODE_COLOR;
-    }
-
-    if (isLeaf()) {
-      int size = this.dataSet == null ? 0 : this.dataSet.size();
-      return String.format("%s [label=\"\",label=%s,shape=circle,fontsize=10]\n", this.toString(), size);
-    } else {
-      return String.format("%s [label=\"\",fillcolor=%s,shape=point]\n", this.toString(), fillColor);
-    }
+    int size = this.dataSet == null ? 0 : this.dataSet.size();
+      return String.format("%s [label=\"\",color=%s,label=%s,shape=circle,fontsize=10]\n", this.toString(), fillColor, size);
   }
 }

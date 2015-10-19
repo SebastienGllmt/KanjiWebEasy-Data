@@ -1,6 +1,6 @@
 package suffixtree;
 
-class ActivePoint<D extends TreeData> {
+class ActivePoint<D> {
 	
 	/**
 	 * represents the node holding our active edge

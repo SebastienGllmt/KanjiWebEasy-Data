@@ -2,7 +2,7 @@ package suffixtree;
 
 import queryparse.BaseNode;
 
-public class SuffixAutomatonState<D extends TreeData> {
+public class SuffixAutomatonState<D> {
 
 	public BaseNode currNode;
 	public int parseCount;

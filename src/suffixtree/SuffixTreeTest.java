@@ -35,9 +35,9 @@ public class SuffixTreeTest {
     String test1 = "たあがさあさが";
     String test2 = "たたあがあさが";
     String test3 = "さあさがたあが";
-    st.addString(new SentenceInfo(test1, null), new ArticleInfo(null, (byte) 0));
-    st.addString(new SentenceInfo(test2, null), new ArticleInfo(null, (byte) 0));
-    st.addString(new SentenceInfo(test3, null), new ArticleInfo(null, (byte) 0));
+    st.addString(new SentenceInfo(test1, null), new ArticleInfo(null, (short) 0));
+    st.addString(new SentenceInfo(test2, null), new ArticleInfo(null, (short) 0));
+    st.addString(new SentenceInfo(test3, null), new ArticleInfo(null, (short) 0));
     
     System.out.println(st);
   }

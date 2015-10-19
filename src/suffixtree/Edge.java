@@ -1,6 +1,6 @@
 package suffixtree;
 
-class Edge<D extends TreeData> {
+class Edge<D> {
 
   /**
    * The fact that this is final is important for performance
@@ -15,7 +15,7 @@ class Edge<D extends TreeData> {
 
   public Node<D> child;
   public int childBitset;
-  
+
   /**
    * Edge label used for epsilon transitions
    */
@@ -28,39 +28,23 @@ class Edge<D extends TreeData> {
     this.child = child;
     this.childBitset = 0;
   }
+  
+  public static <D> Edge<D> restOfSentenceEdge(SuffixTree<D> st, SentenceInfo sentenceInfo, int startIndex, D data){
+    Node<D> child = Node.newInternalNode(data, st.getNextNodeId());
+    st.createEpsilonSuffixLink(child);
+    assert sentenceInfo.sentence.length() - startIndex > 0;
+    return new Edge<D>(sentenceInfo, startIndex, sentenceInfo.sentence.length(), child);
+  }
 
-  public static <D extends TreeData> Edge<D> createActiveEdge(SentenceInfo sentenceInfo) {
+  public static <D> Edge<D> createActiveEdge(SentenceInfo sentenceInfo) {
     return new Edge<D>(sentenceInfo, 0, 0, null);
   }
 
-  public static <D extends TreeData> Edge<D> createNewEdge(SuffixTree<D> tree, SentenceInfo sentenceInfo, int startIndex, int endIndex, D data) {
-
-    // NOTE: If endIndex == startIndex then this function doesn't create an epsilon suffix link
-    // However, one should be created. This is  left up to the caller of this function.
-    if (endIndex - startIndex == 0) {
-      // if this is an epsilon transition just add it
-      return new Edge<D>(SentenceInfo.EMPTY_SENTENCE, 0, 0, Node.newLeafNode(data, tree.getNextNodeId()));
-    } else {
-      // otherwise, add the edge but then add an epsilon transition at the end of it
-      Node<D> child = Node.newInternalNode(tree.getNextNodeId());
-      Edge<D> e = new Edge<D>(sentenceInfo, startIndex, endIndex, child);
-
-      // note: can't already have an edge since we just created it
-      child.getEdgeList().put(EMPTY_EDGE, new Edge<D>(SentenceInfo.EMPTY_SENTENCE, 0, 0, Node.newLeafNode(data, tree.getNextNodeId())));
-      tree.createEpsilonSuffixLink(child);
-      return e;
-    }
-  }
-
-  public static <D extends TreeData> Edge<D> splitEdge(SentenceInfo sentenceInfo, Edge<D> currEdge, int newEnd) {
+  public static <D> Edge<D> splitEdge(SentenceInfo sentenceInfo, Edge<D> currEdge, int newEnd) {
     int oldEnd = currEdge.stringEndIndex;
 
     // assert that the edge is non-empty
     assert currEdge.getLength() > 0;
-    // the child of this edge must have at least one child (at least the epsilon transition)
-    assert currEdge.child.getEdgeList().size() > 0;
-    // if it has only one edge, it must be the epsilon transition
-    assert!(currEdge.child.getEdgeList().size() == 1) || currEdge.child.getEdgeList().containsKey(EMPTY_EDGE);
 
     // assert that this is shrinking the edge
     assert currEdge.stringEndIndex > newEnd;
@@ -86,7 +70,7 @@ class Edge<D extends TreeData> {
     return this.stringEndIndex - this.stringStartIndex;
   }
 
-  public char chatAt(int i) {
+  public char charAt(int i) {
     return this.sentenceInfo.sentence.charAt(this.stringStartIndex + i);
   }
 
@@ -98,6 +82,9 @@ class Edge<D extends TreeData> {
     // if this is an epsilon edge
     if (this.sentenceInfo.sentence.isEmpty()) {
       return 0;
+    }
+    if(index >= this.stringEndIndex){
+      return this.childBitset;
     }
     return this.sentenceInfo.suffixBuckets[index];
   }
@@ -116,7 +103,7 @@ class Edge<D extends TreeData> {
    * However, this is okay because if this edge is split somewhere, sentence.length(),...,k,k-1,...,0, then the part k-1,...,0 is included in childBitset so the result ends up the same
    */
   public int getPartBitset(int index) {
-    return this.childBitset | this.getEdgeBitset(index);
+    return this.childBitset | this.getEdgeBitset(this.stringStartIndex + index);
   }
 
   public String toString() {
