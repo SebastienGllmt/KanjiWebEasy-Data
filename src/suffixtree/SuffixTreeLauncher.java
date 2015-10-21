@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -31,25 +32,112 @@ import util.NewsEasyFormatUtil;
 public class SuffixTreeLauncher {
 
   private static final String IN_DIR = "in";
+  private static final boolean RECREATE = false, SAVE_TO_DB = false;
 
   public static void main(String[] args) throws IOException {
     long start;
-
-    start = System.currentTimeMillis();
-    Map<Character, Integer> symbolMap = KanjiBucketer.getBuckets();
-    System.err.printf("Took %dms to generate the buckets.\n", System.currentTimeMillis() - start);
-
-    SuffixTree<ArticleInfo> st = new SuffixTree<ArticleInfo>();
-
-    start = System.currentTimeMillis();
     JsonFactory jsonFactory = new JsonFactory();
 
-    long parseTime = NewsEasyFormatUtil.parseAllFiles(FileSystems.getDefault().getPath(IN_DIR), st, jsonFactory, symbolMap);
-    System.err.printf("Took %dms to load files\nTook %dms to create the tree.\n", System.currentTimeMillis() - start - parseTime, parseTime);
-
     start = System.currentTimeMillis();
-    st.assignBitsets();
-    System.err.printf("Took %dms total to annotate edges with bitsets.\n", System.currentTimeMillis() - start);
+
+    Map<Character, Integer> symbolMap = new HashMap<>();
+    if (RECREATE) {
+      symbolMap = KanjiBucketer.getBuckets();
+      if (SAVE_TO_DB) {
+        try (Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost:5432/KanjiWebEasy", "postgres", "ESMashS:VY65536")) {
+          Statement statement = conn.createStatement();
+          statement.executeUpdate("DELETE FROM buckets");
+          for (Entry<Character, Integer> e : symbolMap.entrySet()) {
+            statement.executeUpdate(String.format("INSERT INTO buckets VALUES('%c', %d)", e.getKey(), e.getValue()));
+          }
+        } catch (SQLException e1) {
+          e1.printStackTrace();
+        }
+      }
+      System.err.printf("Took %dms to generate the buckets.\n", System.currentTimeMillis() - start);
+
+      SuffixTree<ArticleInfo> st = new SuffixTree<ArticleInfo>();
+
+      start = System.currentTimeMillis();
+
+      long parseTime = NewsEasyFormatUtil.parseAllFiles(FileSystems.getDefault().getPath(IN_DIR), st, jsonFactory, symbolMap); // creates suffix tree
+      System.err.printf("Took %dms to load files\nTook %dms to create the tree.\n", System.currentTimeMillis() - start - parseTime, parseTime);
+
+      start = System.currentTimeMillis();
+      st.assignBitsets();
+      System.err.printf("Took %dms total to annotate edges with bitsets.\n", System.currentTimeMillis() - start);
+
+      if (SAVE_TO_DB) {
+        start = System.currentTimeMillis();
+        try (Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost:5432/KanjiWebEasy", "postgres", "ESMashS:VY65536")) {
+          Statement statement = conn.createStatement();
+          statement.executeUpdate("DELETE FROM nodes");
+          statement.executeUpdate("DELETE FROM edges");
+          saveToDb(conn, st);
+          long clusterStart = System.currentTimeMillis();
+          statement.execute("CLUSTER edges; CLUSTER nodes");
+          System.err.printf("Took %dms to cluster\n", System.currentTimeMillis() - clusterStart);
+        } catch (SQLException e) {
+          e.printStackTrace();
+        }
+        System.err.printf("Took %dms to save tree to DB.\n", System.currentTimeMillis() - start);
+      }
+      
+      try {
+        long parseStart = System.currentTimeMillis();
+        QueryParser parser = new QueryParser("「(.)*」(.)*言", symbolMap);
+        FiniteAutomaton fa = parser.parse();
+        //String sentence = "「海」消すように言い";
+        //int[] suffixBuckets = SuffixTreeLauncher.getSuffixBuckets(sentence, symbolMap);
+        //boolean inLang = fa.isInLanguage(sentence, suffixBuckets);
+        //System.out.println(inLang);
+        Set<ArticleInfo> result = st.FindMatching(fa);
+        for (ArticleInfo article : result) {
+          //System.out.println(NewsEasyFormatUtil.getSentenceFromArticleInfo(FileSystems.getDefault().getPath(IN_DIR), article, jsonFactory));
+        }
+        System.err.println("Found " + result.size() + " hits in " + (System.currentTimeMillis() - parseStart) + "ms");
+      } catch (InvalidQueryException e) {
+        e.printStackTrace();
+      }
+      List<String> wildcardVariations = insertWildcardsInBetween("プロ野球の山本昌投手");
+      start = System.currentTimeMillis();
+      for (String s : wildcardVariations) {
+        Set<ArticleInfo> found = st.findAll(s.split("\\*"), 40, symbolMap);
+      }
+      System.err.printf("Took %dms to find all wildcards of the string", System.currentTimeMillis() - start);
+
+      for (String s : insertWildcardsInBetween("プロ野球の山本昌投")) {
+        s += "*凧"; // these should never follow
+        Set<ArticleInfo> found = st.findAll(s.split("\\*"), 40, symbolMap);
+        if (found.size() != 0) {
+          System.err.println("Failed on " + s);
+        }
+      }
+    } else {
+      try (Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost:5432/KanjiWebEasy", "postgres", "ESMashS:VY65536")) {
+        Statement s = conn.createStatement();
+        ResultSet buckets = s.executeQuery("SELECT * FROM buckets");
+        while (buckets.next()) {
+          symbolMap.put(buckets.getString(1).charAt(0), buckets.getInt(2));
+        }
+      } catch (SQLException e1) {
+        e1.printStackTrace();
+      }
+      System.err.printf("Took %dms to generate the buckets.\n", System.currentTimeMillis() - start);
+      
+      start = System.currentTimeMillis();
+      try (Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost:5432/KanjiWebEasy", "postgres", "ESMashS:VY65536")) {
+        QueryParser parser = new QueryParser("「(.)*」(.)*言", symbolMap);
+        FiniteAutomaton fa = parser.parse();
+        Set<ArticleInfo> result = SuffixTreeLauncher.FindMatching(fa, conn, symbolMap, 999999, 999999);
+        for (ArticleInfo article : result) {
+          System.out.println(NewsEasyFormatUtil.getSentenceFromArticleInfo(FileSystems.getDefault().getPath(IN_DIR), article, jsonFactory));
+        }
+        System.err.printf("Found %d hits in %dms on DB.\n", result.size(), System.currentTimeMillis() - start);
+      } catch (SQLException | InvalidQueryException e) {
+        e.printStackTrace();
+      }
+    }
 
     //System.out.println(st);
 
@@ -69,64 +157,6 @@ public class SuffixTreeLauncher {
     //		for (ArticleInfo info : st.findAll(query.split("\\*"), 40, symbolMap)) {
     //			System.out.println(getSentenceFromArticleInfo(info, jsonFactory));
     //		}
-
-    start = System.currentTimeMillis();
-    try (Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost:5432/KanjiWebEasy", "postgres", "ESMashS:VY65536")) {
-      QueryParser parser = new QueryParser("(.)*", symbolMap);
-      FiniteAutomaton fa = parser.parse();
-      Set<ArticleInfo> result = SuffixTreeLauncher.FindMatching(fa, conn, symbolMap);
-      for (ArticleInfo article : result) {
-        //System.out.println(NewsEasyFormatUtil.getSentenceFromArticleInfo(FileSystems.getDefault().getPath(IN_DIR), article, jsonFactory));
-      }
-      System.err.printf("Found %d hits in %dms on DB.\n", result.size(), System.currentTimeMillis() - start);
-    } catch (SQLException | InvalidQueryException e) {
-      e.printStackTrace();
-    }
-    try {
-      long parseStart = System.currentTimeMillis();
-      QueryParser parser = new QueryParser("。(.)+", symbolMap);
-      FiniteAutomaton fa = parser.parse();
-      //String sentence = "「海」消すように言い";
-      //int[] suffixBuckets = SuffixTreeLauncher.getSuffixBuckets(sentence, symbolMap);
-      //boolean inLang = fa.isInLanguage(sentence, suffixBuckets);
-      //System.out.println(inLang);
-      Set<ArticleInfo> result = st.FindMatching(fa);
-      for (ArticleInfo article : result) {
-        //System.out.println(NewsEasyFormatUtil.getSentenceFromArticleInfo(FileSystems.getDefault().getPath(IN_DIR), article, jsonFactory));
-      }
-      System.err.println("Found " + result.size() + " hits in " + (System.currentTimeMillis() - parseStart) + "ms");
-    } catch (InvalidQueryException e) {
-      e.printStackTrace();
-    }
-    System.exit(0);
-    List<String> wildcardVariations = insertWildcardsInBetween("プロ野球の山本昌投手");
-    start = System.currentTimeMillis();
-    for (String s : wildcardVariations) {
-      Set<ArticleInfo> found = st.findAll(s.split("\\*"), 40, symbolMap);
-    }
-    System.err.printf("Took %dms to find all wildcards of the string", System.currentTimeMillis() - start);
-
-    for (String s : insertWildcardsInBetween("プロ野球の山本昌投")) {
-      s += "*凧"; // these should never follow
-      Set<ArticleInfo> found = st.findAll(s.split("\\*"), 40, symbolMap);
-      if (found.size() != 0) {
-        System.err.println("Failed on " + s);
-      }
-    }
-    System.exit(0);
-    start = System.currentTimeMillis();
-    try (Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost:5432/KanjiWebEasy", "postgres", "ESMashS:VY65536")) {
-      Statement statement = conn.createStatement();
-      statement.executeUpdate("DELETE FROM nodes");
-      statement.executeUpdate("DELETE FROM edges");
-      saveToDb(conn, st);
-      long clusterStart = System.currentTimeMillis();
-      statement.execute("CLUSTER edges; CLUSTER nodes");
-      System.err.printf("Took %dms to cluster\n", System.currentTimeMillis() - clusterStart);
-    } catch (SQLException e) {
-      e.printStackTrace();
-    }
-    System.err.printf("Took %dms to save tree to DB.\n", System.currentTimeMillis() - start);
   }
 
   public static <D> void saveToDb(Connection conn, SuffixTree<D> st) throws SQLException {
@@ -178,14 +208,21 @@ public class SuffixTreeLauncher {
     return stringList;
   }
 
-  public static Set<ArticleInfo> FindMatching(FiniteAutomaton fa, Connection conn, Map<Character, Integer> symbolMap) throws SQLException {
+  public static Set<ArticleInfo> FindMatching(FiniteAutomaton fa, Connection conn, Map<Character, Integer> symbolMap, long timeout, int sufficientResults) throws SQLException {
+    long startTime = System.currentTimeMillis();
     Set<ArticleInfo> dataSet = new HashSet<ArticleInfo>();
     Set<SearchNode> seenSet = new HashSet<>();
     TreeSet<Integer> dataNodes = new TreeSet<Integer>();
-    
+
     Statement statement = conn.createStatement();
     ResultSet rs = statement.executeQuery("SELECT to_node, branch, child_bitset, full_bitset FROM edges WHERE from_node=0");
     while (rs.next()) {
+      if (System.currentTimeMillis() - startTime > timeout) {
+        break;
+      }
+      if (dataNodes.size() >= sufficientResults) {
+        break;
+      }
       int toNode = rs.getInt(1);
       String text = rs.getString(2);
       int childBitset = rs.getInt(3);
@@ -193,18 +230,18 @@ public class SuffixTreeLauncher {
 
       List<SearchNode> currDepth = new ArrayList<>();
       currDepth.add(new SearchNode(fa.startState, 0, new DatabaseEdge(text, toNode, childBitset, fullBitset, KanjiBucketer.getSuffixBuckets(text, symbolMap)), 0));
-      SuffixTreeLauncher.FindMatching(currDepth, seenSet, dataSet, fa.finalState, conn, symbolMap, dataNodes);
+      SuffixTreeLauncher.FindMatching(currDepth, seenSet, fa.finalState, conn, symbolMap, dataNodes, startTime, timeout, sufficientResults);
     }
-    
+
     if (dataNodes.size() > 0) {
       StringBuilder sb = new StringBuilder("0000000000,".length() * dataNodes.size());
       sb.append('(');
       sb.append(dataNodes.first());
-      
+
       Iterator<Integer> iter = dataNodes.iterator();
       iter.next();
-      while(iter.hasNext()) {
-        sb.append(","+iter.next());
+      while (iter.hasNext()) {
+        sb.append("," + iter.next());
       }
       sb.append(')');
 
@@ -219,24 +256,30 @@ public class SuffixTreeLauncher {
     return dataSet;
   }
 
-  private static void FindMatching(List<SearchNode> currDepth, Set<SearchNode> seenSet, Set<ArticleInfo> results, BaseNode finalState, Connection conn, Map<Character, Integer> symbolMap, Set<Integer> dataNodes) throws SQLException {
+  private static void FindMatching(List<SearchNode> currDepth, Set<SearchNode> seenSet, BaseNode finalState, Connection conn, Map<Character, Integer> symbolMap, Set<Integer> dataNodes, long startTime, long timeout, int sufficientResults) throws SQLException {
     if (currDepth.size() == 0) {
+      return;
+    }
+    if (dataNodes.size() >= sufficientResults) {
       return;
     }
 
     for (SearchNode sn : currDepth) {
       if (sn.currNode == finalState) {
-        DfsSearchNode(sn.edge.child, dataNodes, results, conn);
+        DfsSearchNode(sn.edge.child, dataNodes, conn);
       }
     }
 
     List<SearchNode> nextDepth = new ArrayList<>();
 
     for (SearchNode sn : currDepth) {
+      if (System.currentTimeMillis() - startTime > timeout) {
+        return;
+      }
       nextDepth.addAll(getNextAutomatonNodes(sn, seenSet, conn, symbolMap));
     }
 
-    SuffixTreeLauncher.FindMatching(nextDepth, seenSet, results, finalState, conn, symbolMap, dataNodes);
+    SuffixTreeLauncher.FindMatching(nextDepth, seenSet, finalState, conn, symbolMap, dataNodes, startTime, timeout, sufficientResults);
   }
 
   private static List<SearchNode> getNextAutomatonNodes(SearchNode sn, Set<SearchNode> seenSet, Connection conn, Map<Character, Integer> symbolMap) throws SQLException {
@@ -274,16 +317,16 @@ public class SuffixTreeLauncher {
     return nextNodes;
   }
 
-  private static void DfsSearchNode(int node, Set<Integer> dataNodes, Set<ArticleInfo> dataSet, Connection conn) throws SQLException {
+  private static void DfsSearchNode(int node, Set<Integer> dataNodes, Connection conn) throws SQLException {
     // add all data for this node    
-    if(!dataNodes.add(node)){
+    if (!dataNodes.add(node)) {
       return; // if we already contained this node, we already contain all its children.
     }
     // find all children node and recurse
     Statement statement = conn.createStatement();
     ResultSet rs = statement.executeQuery("SELECT * FROM get_reachable(" + node + ")");
     while (rs.next()) {
-      dataNodes.add(node);
+      dataNodes.add(rs.getInt(1));
     }
   }
 
