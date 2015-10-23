@@ -4,15 +4,13 @@ public class DatabaseEdge {
 
   public final String text;
   public final int childBitset;
-  public final int fullBitset;
   private final int[] bitset;
   public int child;
   
-  public DatabaseEdge(String text, int child, int childBitset, int fullBitset, int[] bitset){
+  public DatabaseEdge(String text, int child, int childBitset, int[] bitset){
     this.text = text;
     this.child = child;
     this.childBitset = childBitset;
-    this.fullBitset = fullBitset;
     this.bitset = bitset;
   }
   
