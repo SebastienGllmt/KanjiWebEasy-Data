@@ -5,3 +5,5 @@
 !run_download.bat
 !runallquery.bat
 !.gitignore
+!/news/
+/news/*/
