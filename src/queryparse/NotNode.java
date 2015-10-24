@@ -14,6 +14,7 @@ class NotNode extends BaseNode {
 
 	@Override
 	public AutomatonEdge getAutomatonEdge(Character c) {
+	  if(c == ReservedSymbols.DOT) return null;
 		return this.excludedSet.contains(c) ? null : this.edge;
 	}
 	
