@@ -1,6 +1,7 @@
 /*
 /*/
 !/src/
+!/res/
 !dotrun.bat
 !run_download.bat
 !runallquery.bat

@@ -1,0 +1,13 @@
+{
+	"0" : "regular",
+	"1" : "regular",
+	"2" : "regular",
+	"3" : "regular",
+	"4" : "regular",
+	"L" : "locations",
+	"B" : "particles",
+	"F" : "foreign",
+	"C" : "groups",
+	"N" : "names",
+	'-' : "none"
+}
