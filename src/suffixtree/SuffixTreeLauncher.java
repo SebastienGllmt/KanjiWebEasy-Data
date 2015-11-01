@@ -133,7 +133,7 @@ public class SuffixTreeLauncher {
 
       start = System.currentTimeMillis();
       try (Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost:5432/KanjiWebEasy", "postgres", "ESMashS:VY65536")) {
-        QueryParser parser = new QueryParser("[生]まれた", symbolMap);
+        QueryParser parser = new QueryParser("「(.)*」(.)*言", symbolMap);
         FiniteAutomaton fa = parser.parse();
         Set<ArticleInfo> result = SuffixTreeLauncher.FindMatching(fa, conn, symbolMap, 999999, 999999);
         JsonFactory jsonFactory = new JsonFactory();
@@ -303,7 +303,8 @@ public class SuffixTreeLauncher {
         String text = rs.getString(2);
         int childBitset = rs.getInt(3);
 
-        DatabaseEdge de = new DatabaseEdge(text, toNode, childBitset, KanjiBucketer.getSuffixBuckets(text, symbolMap));
+        int[] buckets = KanjiBucketer.getSuffixBuckets(text, symbolMap);
+        DatabaseEdge de = new DatabaseEdge(text, toNode, childBitset, buckets);
         nextNodes.add(new SearchNode(sn.currNode, sn.parseCount, de, 0));
       }
     } else {
