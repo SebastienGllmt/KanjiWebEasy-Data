@@ -4,45 +4,35 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
-
 import util.NewsEasyFormatUtil;
 
 public class ArticleHTMLParser {
+	
 	
 	public static final File		regionFile	= FileSystems.getDefault().getPath("res", "regionFile.json").toFile();
 	public static final String	LNEWS_PATH	= "news/lnews";
 	
 	public static JSONObject getRegionData() throws IOException {
-		JSONObject urlLookup = new JSONObject();
-		
-		Document doc = Jsoup.connect("http://www3.nhk.or.jp/lnews/").get();
-		Elements regions = doc.select("h2");
-		for (Element region : regions) {
-			JSONObject regionJSON = new JSONObject();
-			
-			Elements areas = region.parent().parent().children().select("a.areaName");
-			for (Element area : areas) {
-				String url = area.attr("href");
-				String name = area.text();
-				if (url.contains("lnews")) {
-					String englishName = url.substring("http://www3.nhk.or.jp/lnews/".length(), url.length() - 1);
-					url = url + "nhk_" + englishName + ".xml";
-				}
-				regionJSON.put(name, url);
-			}
-			
-			urlLookup.put(region.text(), regionJSON);
-		}
-		
-		NewsEasyFormatUtil.printJSONObject(regionFile, urlLookup);
-		
-		return urlLookup;
+		return NewsEasyFormatUtil.createJSONFromFile(regionFile);
+		/*
+		 * JSONObject urlLookup = new JSONObject();
+		 * 
+		 * Document doc = Jsoup.connect("http://www3.nhk.or.jp/lnews/").get();
+		 * Element regionList = doc.getElementById("lmap");
+		 * assert regionList != null;
+		 * assert regionList.children().size() != 0;
+		 * 
+		 * for (Element region : regionList.children()) {
+		 * JSONObject regionJSON = new JSONObject();
+		 * 
+		 * String url = region.attr("href");
+		 * String name = region.attr("alt");
+		 * }
+		 * 
+		 * NewsEasyFormatUtil.printJSONObject(regionFile, urlLookup);
+		 * 
+		 * return urlLookup;
+		 */
 	}
 	
 	public static boolean saveNewsWebFormat(String areaName, String URL) {
@@ -141,7 +131,16 @@ public class ArticleHTMLParser {
 					articleDivision.put(divisionObj);
 				} else if (e.nodeName().equals("p")) {
 					if (!e.className().equals("image")) {
-						currDivision.put(e.text());
+						if (currDivision == null) {
+							// sometimes articles start with some text without a header to the section
+							JSONObject divisionObj = new JSONObject();
+							currDivision = new JSONArray();
+							currDivision.put(e.text());
+							divisionObj.put("", currDivision);
+							articleDivision.put(divisionObj);
+						} else {
+							currDivision.put(e.text());
+						}
 					}
 				}
 			}

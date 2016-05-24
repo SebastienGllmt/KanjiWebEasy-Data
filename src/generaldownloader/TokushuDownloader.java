@@ -57,7 +57,7 @@ public class TokushuDownloader {
 					}
 				}
 				if (!isNewArticle) {
-					return true;
+					//return true;
 				}
 				try {
 					Thread.sleep(1000);
