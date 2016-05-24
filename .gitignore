@@ -6,5 +6,6 @@
 !run_download.bat
 !runallquery.bat
 !.gitignore
+!README.md
 !/news/
 /news/*/
